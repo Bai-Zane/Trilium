@@ -35,12 +35,24 @@ export function isMathJaxVersion2( MathJax: unknown ): MathJax is MathJax2 {
 
 // Check if equation has delimiters.
 export function hasDelimiters( text: string ): RegExpMatchArray | null {
-	return text.match( /^(\\\[.*?\\\]|\\\(.*?\\\))$/ );
+	return text.match( /^(\\\[.*?\\\]|\\\(.*?\\\)|\$\$.*?\$\$|\$.*?\$)$/ );
 }
 
 // Find delimiters count
 export function delimitersCounts( text: string ): number | undefined {
-	return text.match( /(\\\[|\\\]|\\\(|\\\))/g )?.length;
+	const latexDelimiters = text.match( /(\\\[|\\\]|\\\(|\\\))/g );
+	const dollarDelimiters = text.match( /(\$\$|\$)/g );
+	
+	// Count both types of delimiters
+	const latexCount = latexDelimiters?.length ?? 0;
+	const dollarCount = dollarDelimiters?.length ?? 0;
+	
+	// If we have both types, return undefined (invalid)
+	if ( latexCount > 0 && dollarCount > 0 ) {
+		return undefined;
+	}
+	
+	return latexCount + dollarCount;
 }
 
 // Extract delimiters and figure display mode for the model
@@ -50,18 +62,35 @@ export function extractDelimiters( equation: string ): {
 } {
 	equation = equation.trim();
 
-	// Remove delimiters (e.g. \( \) or \[ \])
+	// Check for LaTeX delimiters (e.g. \( \) or \[ \])
 	const hasInlineDelimiters =
 		equation.includes( '\\(' ) && equation.includes( '\\)' );
 	const hasDisplayDelimiters =
 		equation.includes( '\\[' ) && equation.includes( '\\]' );
+	
+	// Check for dollar delimiters (e.g. $ $ or $$ $$)
+	const hasDoubleDollar = equation.startsWith( '$$' ) && equation.endsWith( '$$' );
+	const hasSingleDollar = !hasDoubleDollar && equation.startsWith( '$' ) && equation.endsWith( '$' );
+	
+	let display = false;
+	
 	if ( hasInlineDelimiters || hasDisplayDelimiters ) {
+		// LaTeX style delimiters: \(...\) or \[...\]
 		equation = equation.substring( 2, equation.length - 2 ).trim();
+		display = hasDisplayDelimiters;
+	} else if ( hasDoubleDollar ) {
+		// Display math: $$...$$
+		equation = equation.substring( 2, equation.length - 2 ).trim();
+		display = true;
+	} else if ( hasSingleDollar ) {
+		// Inline math: $...$
+		equation = equation.substring( 1, equation.length - 1 ).trim();
+		display = false;
 	}
 
 	return {
 		equation,
-		display: hasDisplayDelimiters
+		display
 	};
 }
 
